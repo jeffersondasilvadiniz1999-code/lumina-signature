@@ -1,0 +1,21 @@
+ALTER TABLE admins ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'owner';
+ALTER TABLE admins ADD COLUMN IF NOT EXISTS session_version INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS session_version INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE products ADD COLUMN IF NOT EXISTS deleted_at TEXT;
+ALTER TABLE uploaded_images ADD COLUMN IF NOT EXISTS mime_type TEXT NOT NULL DEFAULT 'image/jpeg';
+ALTER TABLE uploaded_images ADD COLUMN IF NOT EXISTS cloudinary_public_id TEXT;
+ALTER TABLE uploaded_images ADD COLUMN IF NOT EXISTS delivery_url TEXT;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS idempotency_key TEXT;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS request_fingerprint TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS orders_customer_idempotency ON orders(customer_id,idempotency_key) WHERE idempotency_key IS NOT NULL;
+CREATE INDEX IF NOT EXISTS products_public_catalog ON products(status,created_at) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS order_history_order ON order_changes(order_id,created_at);
+CREATE TABLE IF NOT EXISTS login_attempts(bucket TEXT PRIMARY KEY, attempts INTEGER NOT NULL, expires_at TIMESTAMPTZ NOT NULL);
+CREATE TABLE IF NOT EXISTS admin_invites(token_hash TEXT PRIMARY KEY, email TEXT NOT NULL, role TEXT NOT NULL, expires_at TIMESTAMPTZ NOT NULL, used_at TIMESTAMPTZ);
+CREATE TABLE IF NOT EXISTS password_resets(token_hash TEXT PRIMARY KEY, customer_id INTEGER NOT NULL REFERENCES customers(id), expires_at TIMESTAMPTZ NOT NULL, used_at TIMESTAMPTZ);
+-- Repair only orphaned references; preserve all existing valid assignments.
+INSERT INTO categories(name,position) VALUES('Sem categoria',9999) ON CONFLICT(name) DO NOTHING;
+UPDATE products SET category_id=(SELECT id FROM categories WHERE name='Sem categoria') WHERE NOT EXISTS(SELECT 1 FROM categories c WHERE c.id=products.category_id);
+UPDATE products SET subcategory_id=NULL WHERE subcategory_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM subcategories s WHERE s.id=products.subcategory_id AND s.category_id=products.category_id);
+ALTER TABLE products ADD CONSTRAINT products_category_fk FOREIGN KEY(category_id) REFERENCES categories(id);
+ALTER TABLE products ADD CONSTRAINT products_subcategory_fk FOREIGN KEY(subcategory_id) REFERENCES subcategories(id) ON DELETE SET NULL;
