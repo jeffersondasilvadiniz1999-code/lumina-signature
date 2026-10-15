@@ -1,0 +1,24 @@
+import fs from 'node:fs';import assert from 'node:assert/strict';import vm from 'node:vm';import {JSDOM} from 'jsdom';
+const root=process.argv[2];const source=fs.readFileSync(root+'/static/app.js','utf8');
+const html=fs.readFileSync(root+'/templates/index.html','utf8');
+const dom=new JSDOM(html,{url:'https://test.invalid/?q=anel&color=Prata&size=17%20cm',runScripts:'outside-only'});const w=dom.window;w.Headers=Headers;
+const product={id:999,name:'Anel <img src=x onerror=alert(1)>',photos:['javascript:alert(1)'],price:100,final_price:90,promo_percent:10,category_name:'Anéis',colors:['Prata'],sizes:['17 cm'],material:'Aço'};
+const responses={'/api/me':{customer:null,admin:null},'/api/settings':{},'/api/categories':[{id:1,name:'Anéis'}],'/api/colors':[{name:'Prata'},{name:'Dourado'}],'/api/products':[product]};
+w.fetch=async url=>{
+ if(url==='/api/featured')return {ok:false,json:async()=>({error:'simulated failure'})};
+ const value=responses[url]??(url.startsWith('/api/products?')?[product]:{});
+ return {ok:true,json:async()=>value};
+};
+w.eval(source);await w.home();
+assert.match(w.document.querySelector('#catalog').textContent,/Anel/);
+assert.match(w.document.querySelector('#featured').textContent,/catálogo continua disponível/);
+assert.equal(w.document.querySelectorAll('#catalog [onerror]').length,0);
+assert.equal(w.document.querySelector('#catalog img').getAttribute('src'),'/static/placeholder.svg');
+assert.equal(w.document.querySelector('#colorFilter').value,'Prata');
+const elements={search:{value:'anel'},catFilter:{value:'2'},colorFilter:{value:'Prata'},sizeFilter:{value:'17 cm'},materialFilter:{value:'Aço'},modalityFilter:{value:'Pronta entrega'},promoFilter:{value:'1'},sort:{value:'az'}};
+const sandbox={URLSearchParams,location:{href:''},document:{querySelector:s=>elements[s.slice(1)]}};
+vm.createContext(sandbox);vm.runInContext('const $=s=>document.querySelector(s);'+w.applyFilters.toString()+';applyFilters();',sandbox);
+const parsed=new URL(sandbox.location.href,'https://test.invalid');
+for(const [key,value] of [['q','anel'],['category','2'],['color','Prata'],['size','17 cm'],['material','Aço']])assert.equal(parsed.searchParams.get(key),value);
+assert.equal(parsed.searchParams.has('colorFilter'),false);
+console.log('UI tests passed: catálogo isolado de falha em destaques; XSS; mídia segura; restauração dos filtros; parâmetros de busca e variações.');
