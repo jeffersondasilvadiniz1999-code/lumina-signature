@@ -30,7 +30,7 @@ def install(app,db,require_admin,require_customer):
 
     @app.before_request
     def guard():
-        if os.environ.get('STAGING_MODE')=='1' and request.path not in ('/admin','/api/admin/login','/api/me','/api/csrf','/healthz') and not request.path.startswith('/static/'):
+        if os.environ.get('STAGING_MODE')=='1' and request.path not in ('/admin','/api/admin/login','/api/me','/api/csrf','/healthz','/readyz') and not request.path.startswith('/static/'):
             if not require_admin():return jsonify({'error':'Ambiente de validação restrito à administração.'}),401
         if not request.path.startswith('/api/'):return
         if request.method not in ('GET','HEAD','OPTIONS'):

@@ -225,3 +225,11 @@ def test_https_email_provider_contract(monkeypatch):
     mailer.send_reset('customer@example.invalid','Test message')
     assert requests[0].full_url=='https://api.brevo.com/v3/smtp/email'
     assert json.loads(requests[0].data)['to'][0]['email']=='customer@example.invalid'
+
+
+def test_staging_protection_allows_healthcheck_only(client,monkeypatch):
+    monkeypatch.setenv('STAGING_MODE','1')
+    assert client.get('/readyz').status_code==200
+    assert client.get('/healthz').status_code==200
+    assert client.get('/api/products').status_code==401
+    assert client.get('/admin').status_code==200
